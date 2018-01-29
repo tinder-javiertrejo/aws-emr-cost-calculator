@@ -201,10 +201,12 @@ class EmrCostCalculator:
                 inst_group.price = float(group.bidprice)
             else:
                 try:
-                    inst_group.price = prices[group.instancetype]['ec2'] + prices[group.instancetype]['emr']
+                    inst_group.price = prices[group.instancetype]['ec2'] + \
+                                       prices[group.instancetype]['emr']
                 except KeyError:
                     print >> sys.stderr, \
-                        "[ERROR] Unknown InstanceID: %s. Please define prices for it in config.yml" % group.instancetype
+                        "[ERROR] Unknown InstanceID: %s. Please define " \
+                        "prices for it in config.yml" % group.instancetype
                     quit()
             instance_groups.append(inst_group)
         return instance_groups
