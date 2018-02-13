@@ -29,16 +29,14 @@ calculate the cost for
 """
 
 from docopt import docopt
-import boto.emr
+import boto3
 from retrying import retry
 import sys
-import time
-import math
 import yaml
 import datetime
 
 config = yaml.load(open('config.yml', 'r'))
-prices = config['prices']
+prices_config = config['prices']
 
 
 def validate_date(date_text):
@@ -48,89 +46,79 @@ def validate_date(date_text):
         raise ValueError('Incorrect data format, should be YYYY-MM-DD')
 
 
-def retry_if_EmrResponseError(exception):
+def is_error_retriable(exception):
     """
     Use this function in order to back off only
-    on EmrResponse errors and not in other exceptions
+    if error is retriable
     """
-    return isinstance(exception, boto.exception.EmrResponseError)
+    # TODO verify if this is correct way to handle this. Haven't seen errors like this myself
+    try:
+        return exception.response['Error']['Code'].startswith("5")
+    except AttributeError:
+        return False
 
 
 class Ec2Instance:
-
-    def __init__(self, creation_ts, termination_ts, instance_price):
-        self.lifetime = self._get_lifetime(creation_ts, termination_ts)
-        self.cost = self.lifetime * instance_price
-
-    @staticmethod
-    def _parse_dates(creation_ts, termination_ts):
-        """
-        :param creation_ts: the creation time string
-        :param termination_ts: the termination time string
-        :return: the lifetime of a single instance in hours
-        """
-        date_format = '%Y-%m-%dT%H:%M:%S.%fZ'
-        creation_ts = \
-            time.mktime(time.strptime(creation_ts, date_format))
-        termination_ts = \
-            time.mktime(time.strptime(termination_ts, date_format))
-        return creation_ts, termination_ts
-
-    def _get_lifetime(self, creation_ts, termination_ts):
-        """
-        :param creation_ts: the creation time string
-        :param termination_ts: the termination time string
-        :return: the lifetime of a single instance in hours
-        """
-        (creation_ts, termination_ts) = \
-            Ec2Instance._parse_dates(creation_ts, termination_ts)
-        return math.ceil((termination_ts - creation_ts) / 3600)
+    def __init__(self, creation_ts, termination_ts, instance_type, market_type):
+        # creation_ts (EMR instance group parameter) correlates to EC2 instance start up time
+        self.creation_ts = creation_ts
+        self.termination_ts = termination_ts
+        self.instance_type = instance_type
+        self.market_type = market_type
 
 
 class InstanceGroup:
-
-    def __init__(self, group_id, instance_type, group_type):
+    def __init__(self, group_id, instance_type, market_type, group_type):
         self.group_id = group_id
         self.instance_type = instance_type
+        self.market_type = market_type
         self.group_type = group_type
-        self.price = 0
 
 
 class EmrCostCalculator:
-
     def __init__(
-        self,
-        region,
-        aws_access_key_id=None,
-        aws_secret_access_key=None
-    ):
+            self,
+            region,
+            aws_access_key_id=None,
+            aws_secret_access_key=None):
+
         try:
             print >> sys.stderr, \
-                '[INFO] Retrieving cost in region %s' \
-                % (region)
+                '[INFO] Retrieving cost in region %s' % region
             self.conn = \
-                boto.emr.connect_to_region(
-                    region,
-                    aws_access_key_id=aws_access_key_id,
-                    aws_secret_access_key=aws_secret_access_key
-                )
-            self.spot_used = False
+                boto3.client('emr',
+                             region_name=region,
+                             aws_access_key_id=aws_access_key_id,
+                             aws_secret_access_key=aws_secret_access_key
+                             )
+        except Exception as e:
+            print >> sys.stderr, \
+                '[ERROR] Could not establish connection with EMR API'
+            print(e)
+            sys.exit()
+
+        try:
+            self.spot_pricing = SpotPricing(region, aws_access_key_id, aws_secret_access_key)
         except:
             print >> sys.stderr, \
-                '[ERROR] Could not establish connection with EMR api'
+                '[ERROR] Could not establish connection with EC2 API'
 
     def get_total_cost_by_dates(self, created_after, created_before):
         total_cost = 0
         for cluster_id in \
                 self._get_cluster_list(created_after, created_before):
             cost_dict = self.get_cluster_cost(cluster_id)
-            total_cost += cost_dict['TOTAL']
+            if 'TOTAL' in cost_dict:
+                total_cost += cost_dict['TOTAL']
+            else:
+                print >> sys.stderr, \
+                    '[INFO] Cluster %s has no cost associated with it' % cluster_id
         return total_cost
 
     @retry(
         wait_exponential_multiplier=1000,
         wait_exponential_max=7000,
-        retry_on_exception=retry_if_EmrResponseError
+        retry_on_exception=is_error_retriable
     )
     def get_cluster_cost(self, cluster_id):
         """
@@ -143,44 +131,51 @@ class EmrCostCalculator:
                 individual cost of each instance group (Master, Core, Task)
         """
         instance_groups = self._get_instance_groups(cluster_id)
+        availability_zone = self._get_availability_zone(cluster_id)
+
         cost_dict = {}
         for instance_group in instance_groups:
             for instance in self._get_instances(instance_group, cluster_id):
-                cost_dict.setdefault(instance_group.group_type, 0)
-                cost_dict[instance_group.group_type] += instance.cost
+                cost = self._get_instance_cost(instance, availability_zone)
+                group_type = instance_group.group_type
+                cost_dict.setdefault(group_type + ".EC2", 0)
+                cost_dict[group_type + ".EC2"] += cost
+                cost_dict.setdefault(group_type + ".EMR", 0)
+                hours_run = ((instance.termination_ts - instance.creation_ts).total_seconds() / 3600)
+                emr_cost = prices_config[instance.instance_type]['emr'] * hours_run
+                cost_dict[group_type + ".EMR"] += emr_cost
                 cost_dict.setdefault('TOTAL', 0)
-                cost_dict['TOTAL'] += instance.cost
+                cost_dict['TOTAL'] += cost + emr_cost
 
-        return EmrCostCalculator._sanitise_floats(cost_dict)
+        return cost_dict
 
-    @staticmethod
-    def _sanitise_floats(aDict):
-        """
-        Round the values to 3 decimals.
-        #Did it this way to avoid
-        https://docs.python.org/2/tutorial/floatingpoint.html#representation-error
-        """
-        for key in aDict:
-            aDict[key] = round(aDict[key], 3)
-        return aDict
+    def _get_instance_cost(self, instance, availability_zone):
+        if instance.market_type == "SPOT":
+            return self.spot_pricing.get_billed_price_for_period(
+                instance.instance_type, availability_zone, instance.creation_ts, instance.termination_ts)
+
+        elif instance.market_type == "ON_DEMAND":
+            try:
+                return prices_config[instance.instance_type]['ec2'] * \
+                       ((instance.termination_ts - instance.creation_ts).total_seconds() / 3600)
+            except KeyError:
+                print >> sys.stderr, \
+                    "[ERROR] Unknown InstanceID: %s. Please define " \
+                    "prices for it in config.yml" % instance.instancetype
+                quit()
 
     def _get_cluster_list(self, created_after, created_before):
         """
         :return: An iterator of cluster ids for the specified dates
         """
-        marker = None
+        kwargs = {'CreatedAfter': created_after, 'CreatedBefore': created_before}
         while True:
-            cluster_list = \
-                self.conn.list_clusters(
-                    created_after,
-                    created_before,
-                    marker=marker
-                )
-            for cluster in cluster_list.clusters:
-                yield cluster.id
+            cluster_list = self.conn.list_clusters(**kwargs)
+            for cluster in cluster_list['Clusters']:
+                yield cluster['Id']
             try:
-                marker = cluster_list.marker
-            except AttributeError:
+                kwargs['Marker'] = cluster_list['Marker']
+            except KeyError:
                 break
 
     def _get_instance_groups(self, cluster_id):
@@ -188,26 +183,16 @@ class EmrCostCalculator:
         Invokes the EMR api and gets a list of the cluster's instance groups.
         :return: List of our custom InstanceGroup objects
         """
-        groups = self.conn.list_instance_groups(cluster_id).instancegroups
+        groups = self.conn.list_instance_groups(ClusterId=cluster_id)['InstanceGroups']
         instance_groups = []
         for group in groups:
             inst_group = InstanceGroup(
-                group.id,
-                group.instancetype,
-                group.instancegrouptype
+                group['Id'],
+                group['InstanceType'],
+                group['Market'],
+                group['InstanceGroupType']
             )
-            # If is is a spot instance get the bidprice
-            if group.market == 'SPOT':
-                inst_group.price = float(group.bidprice)
-            else:
-                try:
-                    inst_group.price = prices[group.instancetype]['ec2'] + \
-                                       prices[group.instancetype]['emr']
-                except KeyError:
-                    print >> sys.stderr, \
-                        "[ERROR] Unknown InstanceID: %s. Please define " \
-                        "prices for it in config.yml" % group.instancetype
-                    quit()
+
             instance_groups.append(inst_group)
         return instance_groups
 
@@ -215,61 +200,138 @@ class EmrCostCalculator:
         """
         Invokes the EMR api to retrieve a list of all the instances
         that were used in the cluster.
-        This list is then joind to the InstanceGroup list
+        This list is then joined to the InstanceGroup list
         on the instance group id
         :return: An iterator of our custom Ec2Instance objects.
         """
         instance_list = []
-        marker = None
+        list_instances_args = {'ClusterId': cluster_id, 'InstanceGroupId': instance_group.group_id}
         while True:
-            batch = self.conn.list_instances(
-                cluster_id,
-                instance_group.group_id,
-                marker=marker
-            )
-            instance_list.extend(batch.instances)
+            batch = self.conn.list_instances(**list_instances_args)
+            instance_list.extend(batch['Instances'])
             try:
-                marker = batch.marker
-            except AttributeError:
+                list_instances_args['Marker'] = batch['Marker']
+            except KeyError:
                 break
         for instance_info in instance_list:
             try:
-                end_date_time = datetime.datetime \
-                    .now() \
-                    .strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-                if hasattr(instance_info.status.timeline, 'enddatetime'):
-                    end_date_time = instance_info.status.timeline.enddatetime
+                creation_time = instance_info['Status']['Timeline']['CreationDateTime']
+                try:
+                    end_date_time = instance_info['Status']['Timeline']['EndDateTime']
+                except KeyError:
+                    # use same TZ as one in creation time. By default datetime.now() is not TZ aware
+                    end_date_time = datetime.datetime.now(tz=creation_time.tzinfo)
 
                 inst = Ec2Instance(
-                    instance_info.status.timeline.creationdatetime,
+                    instance_info['Status']['Timeline']['CreationDateTime'],
                     end_date_time,
-                    instance_group.price
+                    instance_group.instance_type,
+                    instance_group.market_type
                 )
                 yield inst
             except AttributeError as e:
                 print >> sys.stderr, \
-                    '[WARN] Error when computing instance cost. Cluster: %s'\
+                    '[WARN] Error when computing instance cost. Cluster: %s' \
                     % cluster_id
                 print >> sys.stderr, e
+
+    def _get_availability_zone(self, cluster_id):
+        cluster_description = self.conn.describe_cluster(ClusterId=cluster_id)
+        return cluster_description['Cluster']['Ec2InstanceAttributes']['Ec2AvailabilityZone']
+
+
+class SpotPricing:
+    def __init__(self, region, aws_access_key_id, aws_secret_access_key):
+        self.all_prices = {}
+        self.client_ec2 = boto3.client(
+            'ec2',
+            region_name=region,
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key)
+
+    def _populate_all_prices_if_needed(self, instance_id, availability_zone, start_time, end_time):
+        previous_ts = None
+
+        if (instance_id, availability_zone) in self.all_prices:
+            prices = self.all_prices[(instance_id, availability_zone)]
+            if end_time - sorted(prices.keys())[-1] < datetime.timedelta(days=1, hours=1) \
+                    and sorted(prices.keys())[0] < start_time:
+                # this means we already have requested dates. Nothing to do
+                return
+        else:
+            prices = {}
+
+        next_token = ""
+        while True:
+            prices_response = self.client_ec2.describe_spot_price_history(
+                InstanceTypes=[instance_id],
+                ProductDescriptions=['Linux/UNIX (Amazon VPC)'],
+                AvailabilityZone=availability_zone,
+                StartTime=start_time,
+                EndTime=end_time,
+                NextToken=next_token
+            )
+            for price in prices_response['SpotPriceHistory']:
+                if previous_ts is None:
+                    previous_ts = price['Timestamp']
+                if previous_ts - price['Timestamp'] > datetime.timedelta(days=1, hours=1):
+                    print >> sys.stderr, \
+                        "[ERROR] Expecting maximum of 1 day 1 hour difference between spot price entries. Two dates " \
+                        "causing problems: %s AND %s Diff is: %s" % (
+                            previous_ts, price['Timestamp'], previous_ts - price['Timestamp'])
+                    quit(-1)
+                prices[price['Timestamp']] = float(price['SpotPrice'])
+                previous_ts = price['Timestamp']
+
+            next_token = prices_response['NextToken']
+            if next_token == "":
+                break
+
+        self.all_prices[(instance_id, availability_zone)] = prices
+
+    def get_billed_price_for_period(self, instance_id, availability_zone, start_time, end_time):
+        self._populate_all_prices_if_needed(instance_id, availability_zone, start_time, end_time)
+
+        prices = self.all_prices[(instance_id, availability_zone)]
+
+        summed_price = 0.0
+        sorted_price_timestamps = sorted(prices.keys())
+
+        summed_until_timestamp = start_time
+        for key_id in range(0, len(sorted_price_timestamps)):
+            price_timestamp = sorted_price_timestamps[key_id]
+            if key_id == len(sorted_price_timestamps) - 1 or end_time < sorted_price_timestamps[key_id + 1]:
+                # this is the last price measurement we want: add final part of price segment and exit
+                seconds_passed = (end_time - summed_until_timestamp).total_seconds()
+                summed_price = summed_price + (float(seconds_passed) * prices[price_timestamp] / 3600.0)
+                return summed_price
+            if sorted_price_timestamps[key_id] < summed_until_timestamp < sorted_price_timestamps[key_id + 1]:
+                seconds_passed = (sorted_price_timestamps[key_id + 1] - summed_until_timestamp).total_seconds()
+                summed_price = summed_price + (float(seconds_passed) * prices[price_timestamp] / 3600.0)
+                summed_until_timestamp = sorted_price_timestamps[key_id + 1]
+
 
 if __name__ == '__main__':
     args = docopt(__doc__)
     if args.get('total'):
-        created_after = validate_date(args.get('--created_after'))
-        created_before = validate_date(args.get('--created_before'))
+        created_after_arg = validate_date(args.get('--created_after'))
+        created_before_arg = validate_date(args.get('--created_before'))
         calc = EmrCostCalculator(
             args.get('--region'),
             args.get('--aws_access_key_id'),
             args.get('--aws_secret_access_key')
         )
-        print calc.get_total_cost_by_dates(created_after, created_before)
+        print "TOTAL COST: %.2f" % (calc.get_total_cost_by_dates(created_after_arg, created_before_arg))
+
     elif args.get('cluster'):
         calc = EmrCostCalculator(
             args.get('--region'),
             args.get('--aws_access_key_id'),
             args.get('--aws_secret_access_key')
         )
-        print calc.get_cluster_cost(args.get('--cluster_id'))
+        prices_config = calc.get_cluster_cost(args.get('--cluster_id'))
+        for key in sorted(prices_config.keys()):
+            print "%12s: %6.2f" % (key, prices_config[key])
     else:
         print >> sys.stderr, \
             '[ERROR] Invalid operation, please check usage again'
