@@ -2,3 +2,4 @@ requests
 retrying
 boto3
 docopt
+requests[security]
