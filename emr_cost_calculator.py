@@ -32,11 +32,9 @@ from docopt import docopt
 import boto3
 from retrying import retry
 import sys
-import yaml
 import datetime
-
-config = yaml.load(open('config.yml', 'r'))
-prices_config = config['prices']
+import urllib2
+import json
 
 
 def validate_date(date_text):
@@ -75,6 +73,56 @@ class InstanceGroup:
         self.group_type = group_type
 
 
+class Ec2EmrPricing:
+    def __init__(self, region):
+        url_base = 'https://pricing.us-east-1.amazonaws.com'
+
+        index_response = urllib2.urlopen(url_base + '/offers/v1.0/aws/index.json')
+        index = json.loads(index_response.read())
+
+        emr_regions_response = urllib2.urlopen(url_base + index['offers']['ElasticMapReduce']['currentRegionIndexUrl'])
+        emr_region_url = url_base + json.loads(emr_regions_response.read())['regions'][region]['currentVersionUrl']
+
+        emr_pricing = json.loads(urllib2.urlopen(emr_region_url).read())
+        sku_to_instance_type = {}
+        for sku in emr_pricing['products']:
+            if emr_pricing['products'][sku]['attributes']['softwareType'] == 'EMR':
+                sku_to_instance_type[sku] = emr_pricing['products'][sku]['attributes']['instanceType']
+
+        self.emr_prices = {}
+        for sku in sku_to_instance_type.keys():
+            instance_type = sku_to_instance_type.get(sku)
+            price = float(emr_pricing['terms']['OnDemand'][sku].itervalues().next()['priceDimensions'].itervalues().next()['pricePerUnit']['USD'])
+            self.emr_prices[instance_type] = price
+
+        ec2_regions_response = urllib2.urlopen(url_base + index['offers']['AmazonEC2']['currentRegionIndexUrl'])
+        ec2_region_url = url_base + json.loads(ec2_regions_response.read())['regions'][region]['currentVersionUrl']
+
+        ec2_pricing = json.loads(urllib2.urlopen(ec2_region_url).read())
+
+        ec2_sku_to_instance_type = {}
+        for sku in ec2_pricing['products']:
+            try:
+                if ec2_pricing['products'][sku]['attributes']['tenancy'] == 'Shared' \
+                        and ec2_pricing['products'][sku]['attributes']['operatingSystem'] == 'Linux':
+                    ec2_sku_to_instance_type[sku] = ec2_pricing['products'][sku]['attributes']['instanceType']
+
+            except KeyError:
+                pass
+
+        self.ec2_prices = {}
+        for sku in ec2_sku_to_instance_type.keys():
+            instance_type = ec2_sku_to_instance_type.get(sku)
+            price = float(ec2_pricing['terms']['OnDemand'][sku].itervalues().next()['priceDimensions'].itervalues().next()['pricePerUnit']['USD'])
+            self.ec2_prices[instance_type] = price
+
+    def get_emr_price(self, instance_type):
+        return self.emr_prices[instance_type]
+
+    def get_ec2_price(self, instance_type):
+        return self.ec2_prices[instance_type]
+
+
 class EmrCostCalculator:
     def __init__(
             self,
@@ -102,6 +150,8 @@ class EmrCostCalculator:
         except:
             print >> sys.stderr, \
                 '[ERROR] Could not establish connection with EC2 API'
+
+        self.ec2_emr_pricing = Ec2EmrPricing(region)
 
     def get_total_cost_by_dates(self, created_after, created_before):
         total_cost = 0
@@ -142,7 +192,7 @@ class EmrCostCalculator:
                 cost_dict[group_type + ".EC2"] += cost
                 cost_dict.setdefault(group_type + ".EMR", 0)
                 hours_run = ((instance.termination_ts - instance.creation_ts).total_seconds() / 3600)
-                emr_cost = prices_config[instance.instance_type]['emr'] * hours_run
+                emr_cost = self.ec2_emr_pricing.get_emr_price(instance.instance_type) * hours_run
                 cost_dict[group_type + ".EMR"] += emr_cost
                 cost_dict.setdefault('TOTAL', 0)
                 cost_dict['TOTAL'] += cost + emr_cost
@@ -155,14 +205,8 @@ class EmrCostCalculator:
                 instance.instance_type, availability_zone, instance.creation_ts, instance.termination_ts)
 
         elif instance.market_type == "ON_DEMAND":
-            try:
-                return prices_config[instance.instance_type]['ec2'] * \
-                       ((instance.termination_ts - instance.creation_ts).total_seconds() / 3600)
-            except KeyError:
-                print >> sys.stderr, \
-                    "[ERROR] Unknown InstanceID: %s. Please define " \
-                    "prices for it in config.yml" % instance.instancetype
-                quit()
+            return self.ec2_emr_pricing.get_ec2_price(instance.instance_type) * \
+                   ((instance.termination_ts - instance.creation_ts).total_seconds() / 3600)
 
     def _get_cluster_list(self, created_after, created_before):
         """
@@ -329,9 +373,9 @@ if __name__ == '__main__':
             args.get('--aws_access_key_id'),
             args.get('--aws_secret_access_key')
         )
-        prices_config = calc.get_cluster_cost(args.get('--cluster_id'))
-        for key in sorted(prices_config.keys()):
-            print "%12s: %6.2f" % (key, prices_config[key])
+        calculated_prices = calc.get_cluster_cost(args.get('--cluster_id'))
+        for key in sorted(calculated_prices.keys()):
+            print "%12s: %6.2f" % (key, calculated_prices[key])
     else:
         print >> sys.stderr, \
             '[ERROR] Invalid operation, please check usage again'
