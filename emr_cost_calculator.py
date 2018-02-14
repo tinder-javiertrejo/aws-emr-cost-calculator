@@ -33,8 +33,7 @@ import boto3
 from retrying import retry
 import sys
 import datetime
-import urllib2
-import json
+import requests
 
 
 def validate_date(date_text):
@@ -77,13 +76,13 @@ class Ec2EmrPricing:
     def __init__(self, region):
         url_base = 'https://pricing.us-east-1.amazonaws.com'
 
-        index_response = urllib2.urlopen(url_base + '/offers/v1.0/aws/index.json')
-        index = json.loads(index_response.read())
+        index_response = requests.get(url_base + '/offers/v1.0/aws/index.json')
+        index = index_response.json()
 
-        emr_regions_response = urllib2.urlopen(url_base + index['offers']['ElasticMapReduce']['currentRegionIndexUrl'])
-        emr_region_url = url_base + json.loads(emr_regions_response.read())['regions'][region]['currentVersionUrl']
+        emr_regions_response = requests.get(url_base + index['offers']['ElasticMapReduce']['currentRegionIndexUrl'])
+        emr_region_url = url_base + emr_regions_response.json()['regions'][region]['currentVersionUrl']
 
-        emr_pricing = json.loads(urllib2.urlopen(emr_region_url).read())
+        emr_pricing = requests.get(emr_region_url).json()
         sku_to_instance_type = {}
         for sku in emr_pricing['products']:
             if emr_pricing['products'][sku]['attributes']['softwareType'] == 'EMR':
@@ -95,10 +94,10 @@ class Ec2EmrPricing:
             price = float(emr_pricing['terms']['OnDemand'][sku].itervalues().next()['priceDimensions'].itervalues().next()['pricePerUnit']['USD'])
             self.emr_prices[instance_type] = price
 
-        ec2_regions_response = urllib2.urlopen(url_base + index['offers']['AmazonEC2']['currentRegionIndexUrl'])
-        ec2_region_url = url_base + json.loads(ec2_regions_response.read())['regions'][region]['currentVersionUrl']
+        ec2_regions_response = requests.get(url_base + index['offers']['AmazonEC2']['currentRegionIndexUrl'])
+        ec2_region_url = url_base + ec2_regions_response.json()['regions'][region]['currentVersionUrl']
 
-        ec2_pricing = json.loads(urllib2.urlopen(ec2_region_url).read())
+        ec2_pricing = requests.get(ec2_region_url).json()
 
         ec2_sku_to_instance_type = {}
         for sku in ec2_pricing['products']:
