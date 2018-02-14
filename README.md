@@ -29,6 +29,13 @@ Or, you can set the environment variables:
 `AWS_ACCESS_KEY_ID - Your AWS Access Key ID
 AWS_SECRET_ACCESS_KEY - Your AWS Secret Access Key`
 
+### Install
+
+To install all requirements it's best to use
+`pip install -r requirements.txt`
+
+Users with python<2.7.9 won't be able to run the code if requests[security] isn't installed (which is listed in requirements.txt)
+
 ### License
 
 Distributed under the MIT license. See `LICENSE` for more information.
