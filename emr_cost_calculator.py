@@ -91,7 +91,8 @@ class Ec2EmrPricing:
         self.emr_prices = {}
         for sku in sku_to_instance_type.keys():
             instance_type = sku_to_instance_type.get(sku)
-            price = float(emr_pricing['terms']['OnDemand'][sku].itervalues().next()['priceDimensions'].itervalues().next()['pricePerUnit']['USD'])
+            price = float(emr_pricing['terms']['OnDemand'][sku].itervalues().next()['priceDimensions']
+                          .itervalues().next()['pricePerUnit']['USD'])
             self.emr_prices[instance_type] = price
 
         ec2_regions_response = requests.get(url_base + index['offers']['AmazonEC2']['currentRegionIndexUrl'])
@@ -102,8 +103,8 @@ class Ec2EmrPricing:
         ec2_sku_to_instance_type = {}
         for sku in ec2_pricing['products']:
             try:
-                if ec2_pricing['products'][sku]['attributes']['tenancy'] == 'Shared' \
-                        and ec2_pricing['products'][sku]['attributes']['operatingSystem'] == 'Linux':
+                if (ec2_pricing['products'][sku]['attributes']['tenancy'] == 'Shared' and
+                        ec2_pricing['products'][sku]['attributes']['operatingSystem'] == 'Linux'):
                     ec2_sku_to_instance_type[sku] = ec2_pricing['products'][sku]['attributes']['instanceType']
 
             except KeyError:
@@ -112,7 +113,8 @@ class Ec2EmrPricing:
         self.ec2_prices = {}
         for sku in ec2_sku_to_instance_type.keys():
             instance_type = ec2_sku_to_instance_type.get(sku)
-            price = float(ec2_pricing['terms']['OnDemand'][sku].itervalues().next()['priceDimensions'].itervalues().next()['pricePerUnit']['USD'])
+            price = float(ec2_pricing['terms']['OnDemand'][sku].itervalues().next()['priceDimensions']
+                          .itervalues().next()['pricePerUnit']['USD'])
             self.ec2_prices[instance_type] = price
 
     def get_emr_price(self, instance_type):
@@ -204,8 +206,8 @@ class EmrCostCalculator:
                 instance.instance_type, availability_zone, instance.creation_ts, instance.termination_ts)
 
         elif instance.market_type == "ON_DEMAND":
-            return self.ec2_emr_pricing.get_ec2_price(instance.instance_type) * \
-                   ((instance.termination_ts - instance.creation_ts).total_seconds() / 3600)
+            ec2_price = self.ec2_emr_pricing.get_ec2_price(instance.instance_type)
+            return ec2_price * ((instance.termination_ts - instance.creation_ts).total_seconds() / 3600)
 
     def _get_cluster_list(self, created_after, created_before):
         """
@@ -297,8 +299,8 @@ class SpotPricing:
 
         if (instance_id, availability_zone) in self.all_prices:
             prices = self.all_prices[(instance_id, availability_zone)]
-            if end_time - sorted(prices.keys())[-1] < datetime.timedelta(days=1, hours=1) \
-                    and sorted(prices.keys())[0] < start_time:
+            if (end_time - sorted(prices.keys())[-1] < datetime.timedelta(days=1, hours=1) and
+                    sorted(prices.keys())[0] < start_time):
                 # this means we already have requested dates. Nothing to do
                 return
         else:
