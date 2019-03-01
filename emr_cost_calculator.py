@@ -169,7 +169,8 @@ class EmrCostCalculator:
                 total_cost += cost_dict['TOTAL']
             else:
                 print >> sys.stderr, \
-                    '[INFO] Cluster %s has no cost associated with it' % cluster_id
+                    '[INFO] Cluster %s has no cost associated with it' \
+                    % cluster_id
         return total_cost
 
     @retry(
@@ -198,8 +199,8 @@ class EmrCostCalculator:
                 cost_dict.setdefault(group_type + ".EC2", 0)
                 cost_dict[group_type + ".EC2"] += cost
                 cost_dict.setdefault(group_type + ".EMR", 0)
-                hours_run = ((
-                                         instance.termination_ts - instance.creation_ts).total_seconds() / 3600)
+                hours_run = ((instance.termination_ts - instance.creation_ts)
+                             .total_seconds() / 3600)
                 emr_cost = self.ec2_emr_pricing.get_emr_price(
                     instance.instance_type) * hours_run
                 cost_dict[group_type + ".EMR"] += emr_cost
@@ -217,8 +218,8 @@ class EmrCostCalculator:
         elif instance.market_type == "ON_DEMAND":
             ec2_price = self.ec2_emr_pricing.get_ec2_price(
                 instance.instance_type)
-            return ec2_price * ((
-                                            instance.termination_ts - instance.creation_ts).total_seconds() / 3600)
+            return ec2_price * ((instance.termination_ts - instance.creation_ts)
+                                .total_seconds() / 3600)
 
     def _get_cluster_list(self, created_after, created_before):
         """
@@ -280,7 +281,8 @@ class EmrCostCalculator:
                     end_date_time = instance_info['Status']['Timeline'][
                         'EndDateTime']
                 except KeyError:
-                    # use same TZ as one in creation time. By default datetime.now() is not TZ aware
+                    # use same TZ as one in creation time.
+                    # By default datetime.now() is not TZ aware
                     end_date_time = datetime.datetime.now(
                         tz=creation_time.tzinfo)
 
@@ -338,10 +340,11 @@ class SpotPricing:
             for price in prices_response['SpotPriceHistory']:
                 if previous_ts is None:
                     previous_ts = price['Timestamp']
-                if previous_ts - price['Timestamp'] > datetime.timedelta(days=1,
-                                                                         hours=1):
+                if previous_ts - price['Timestamp'] \
+                        > datetime.timedelta(days=1, hours=1):
                     print >> sys.stderr, \
-                        "[ERROR] Expecting maximum of 1 day 1 hour difference between spot price entries. Two dates " \
+                        "[ERROR] Expecting maximum of 1 day 1 hour difference" \
+                        " between spot price entries. Two dates " \
                         "causing problems: %s AND %s Diff is: %s" % (
                             previous_ts, price['Timestamp'],
                             previous_ts - price['Timestamp'])
@@ -370,7 +373,8 @@ class SpotPricing:
             price_timestamp = sorted_price_timestamps[key_id]
             if key_id == len(sorted_price_timestamps) - 1 or end_time < \
                     sorted_price_timestamps[key_id + 1]:
-                # this is the last price measurement we want: add final part of price segment and exit
+                # this is the last price measurement we want: add final part of
+                # price segment and exit
                 seconds_passed = (
                             end_time - summed_until_timestamp).total_seconds()
                 summed_price = summed_price + (float(seconds_passed) * prices[
@@ -378,8 +382,9 @@ class SpotPricing:
                 return summed_price
             if sorted_price_timestamps[key_id] < summed_until_timestamp < \
                     sorted_price_timestamps[key_id + 1]:
-                seconds_passed = (sorted_price_timestamps[
-                                      key_id + 1] - summed_until_timestamp).total_seconds()
+                seconds_passed = \
+                    (sorted_price_timestamps[key_id + 1]
+                     - summed_until_timestamp).total_seconds()
                 summed_price = summed_price + (float(seconds_passed) * prices[
                     price_timestamp] / 3600.0)
                 summed_until_timestamp = sorted_price_timestamps[key_id + 1]
