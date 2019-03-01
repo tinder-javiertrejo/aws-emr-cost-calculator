@@ -1,4 +1,4 @@
 requests[security]
 retrying
-boto3>=1.5
+boto3>=1.9
 docopt
