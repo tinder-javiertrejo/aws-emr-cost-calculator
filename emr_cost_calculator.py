@@ -23,6 +23,8 @@ Options:
     --cluster_id=<ci>             The id of the cluster you want to calculate
     the cost for
 """
+from __future__ import print_function
+
 
 from docopt import docopt
 import boto3
@@ -97,10 +99,20 @@ class Ec2EmrPricing:
         self.emr_prices = {}
         for sku in sku_to_instance_type.keys():
             instance_type = sku_to_instance_type.get(sku)
-            price = float(
-                emr_pricing['terms']['OnDemand'][sku]
-                .itervalues().next()['priceDimensions']
-                .itervalues().next()['pricePerUnit']['USD'])
+            sku_info = emr_pricing['terms']['OnDemand'][sku]
+            if len(sku_info) > 1:
+                print('[ERROR] More than one SKU for {}'.format(sku_info),
+                      file=sys.stderr)
+                sys.exit(1)
+            _, sku_info_value = sku_info.popitem()
+            price_dimensions = sku_info_value['priceDimensions']
+            if len(sku_info) > 1:
+                print('[ERROR] More than price dimension for {}'
+                      .format(price_dimensions),
+                      file=sys.stderr)
+                sys.exit(1)
+            _, price_dimensions_value = price_dimensions.popitem()
+            price = float(price_dimensions_value['pricePerUnit']['USD'])
             self.emr_prices[instance_type] = price
 
         ec2_regions_response = requests.get(
@@ -114,13 +126,13 @@ class Ec2EmrPricing:
         ec2_sku_to_instance_type = {}
         for sku in ec2_pricing['products']:
             try:
-                if (ec2_pricing['products'][sku]['attributes'][
-                    'tenancy'] == 'Shared' and
-                        ec2_pricing['products'][sku]['attributes'][
-                            'operatingSystem'] == 'Linux'):
-                    ec2_sku_to_instance_type[sku] = \
-                        ec2_pricing['products'][sku]['attributes'][
-                            'instanceType']
+                attr = ec2_pricing['products'][sku]['attributes']
+                if attr['tenancy'] == 'Shared' \
+                        and attr['operatingSystem'] == 'Linux'\
+                        and attr['operation'] == 'RunInstances' \
+                        and attr['capacitystatus'] == 'Used':
+
+                    ec2_sku_to_instance_type[sku] = attr['instanceType']
 
             except KeyError:
                 pass
@@ -128,10 +140,26 @@ class Ec2EmrPricing:
         self.ec2_prices = {}
         for sku in ec2_sku_to_instance_type.keys():
             instance_type = ec2_sku_to_instance_type.get(sku)
-            price = float(
-                ec2_pricing['terms']['OnDemand'][sku]
-                .itervalues().next()['priceDimensions']
-                .itervalues().next()['pricePerUnit']['USD'])
+            sku_info = ec2_pricing['terms']['OnDemand'][sku]
+            if len(sku_info) > 1:
+                print('[ERROR] More than one SKU for {}'.format(sku_info),
+                      file=sys.stderr)
+                sys.exit(1)
+            _, sku_info_value = sku_info.popitem()
+            price_dimensions = sku_info_value['priceDimensions']
+            if len(sku_info) > 1:
+                print('[ERROR] More than price dimension for {}'
+                      .format(price_dimensions),
+                      file=sys.stderr)
+                sys.exit(1)
+            _, price_dimensions_value = price_dimensions.popitem()
+            price = float(price_dimensions_value['pricePerUnit']['USD'])
+            if instance_type in self.ec2_prices:
+                print('[ERROR] Instance price for {} already added'
+                      .format(instance_type),
+                      file=sys.stderr)
+                sys.exit(1)
+
             self.ec2_prices[instance_type] = price
 
     def get_emr_price(self, instance_type):
@@ -148,16 +176,16 @@ class EmrCostCalculator:
         try:
             self.conn = boto3.client('emr', region_name=region)
         except Exception as e:
-            print >> sys.stderr, \
-                '[ERROR] Could not establish connection with EMR API'
+            print('[ERROR] Could not establish connection with EMR API',
+                  file=sys.stderr)
             print(e)
             sys.exit()
 
         try:
             self.spot_pricing = SpotPricing()
         except:
-            print >> sys.stderr, \
-                '[ERROR] Could not establish connection with EC2 API'
+            print('[ERROR] Could not establish connection with EC2 API',
+                  file=sys.stderr)
 
         self.ec2_emr_pricing = Ec2EmrPricing()
 
@@ -169,9 +197,8 @@ class EmrCostCalculator:
             if 'TOTAL' in cost_dict:
                 total_cost += cost_dict['TOTAL']
             else:
-                print >> sys.stderr, \
-                    '[INFO] Cluster %s has no cost associated with it' \
-                    % cluster_id
+                print('[INFO] Cluster {} has no cost associated with it'
+                      .format(cluster_id), file=sys.stderr)
         return total_cost
 
     @retry(
@@ -295,10 +322,8 @@ class EmrCostCalculator:
                 )
                 yield inst
             except AttributeError as e:
-                print >> sys.stderr, \
-                    '[WARN] Error when computing instance cost. Cluster: %s' \
-                    % cluster_id
-                print >> sys.stderr, e
+                print('[WARN] Error when computing instance cost. Cluster: {}\n'
+                      '{}'.format(cluster_id, e), file=sys.stderr)
 
     def _get_availability_zone(self, cluster_id):
         cluster_description = self.conn.describe_cluster(ClusterId=cluster_id)
@@ -343,12 +368,13 @@ class SpotPricing:
                     previous_ts = price['Timestamp']
                 if previous_ts - price['Timestamp'] \
                         > datetime.timedelta(days=1, hours=1):
-                    print >> sys.stderr, \
-                        "[ERROR] Expecting maximum of 1 day 1 hour difference" \
-                        " between spot price entries. Two dates " \
-                        "causing problems: %s AND %s Diff is: %s" % (
+                    print(
+                        "[ERROR] Expecting maximum of 1 day 1 hour difference" 
+                        " between spot price entries. Two dates "
+                        "causing problems: {} AND {} Diff is: {}"
+                        .format(
                             previous_ts, price['Timestamp'],
-                            previous_ts - price['Timestamp'])
+                            previous_ts - price['Timestamp']), file=sys.stderr)
                     quit(-1)
                 prices[price['Timestamp']] = float(price['SpotPrice'])
                 previous_ts = price['Timestamp']
@@ -401,14 +427,14 @@ if __name__ == '__main__':
         created_after_arg = validate_date(args.get('--created_after'))
         created_before_arg = validate_date(args.get('--created_before'))
         calc = EmrCostCalculator()
-        print "TOTAL COST: %.2f" % (calc.get_total_cost_by_dates(
-            created_after_arg, created_before_arg))
+        print("TOTAL COST: {:.2f}".format(calc.get_total_cost_by_dates(
+            created_after_arg, created_before_arg)))
 
     elif args.get('cluster'):
         calc = EmrCostCalculator()
         calculated_prices = calc.get_cluster_cost(args.get('--cluster_id'))
         for key in sorted(calculated_prices.keys()):
-            print "%12s: %6.2f" % (key, calculated_prices[key])
+            print("{:12s}: {:6.2f}".format(key, calculated_prices[key]))
     else:
-        print >> sys.stderr, \
-            '[ERROR] Invalid operation, please check usage again'
+        print('[ERROR] Invalid operation, please check usage again',
+              file=sys.stderr)
