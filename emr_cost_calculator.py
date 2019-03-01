@@ -82,32 +82,32 @@ class Ec2EmrPricing:
         emr_regions_response = requests.get(
             url_base + index['offers']['ElasticMapReduce'][
                 'currentRegionIndexUrl'])
-        emr_region_url = url_base + \
-                         emr_regions_response.json()['regions'][region][
-                             'currentVersionUrl']
+        emr_region_url = \
+            url_base + \
+            emr_regions_response.json()['regions'][region]['currentVersionUrl']
 
         emr_pricing = requests.get(emr_region_url).json()
         sku_to_instance_type = {}
         for sku in emr_pricing['products']:
-            if emr_pricing['products'][sku]['attributes'][
-                'softwareType'] == 'EMR':
+            if emr_pricing['products'][sku]['attributes']['softwareType'] \
+                    == 'EMR':
                 sku_to_instance_type[sku] = \
-                emr_pricing['products'][sku]['attributes']['instanceType']
+                    emr_pricing['products'][sku]['attributes']['instanceType']
 
         self.emr_prices = {}
         for sku in sku_to_instance_type.keys():
             instance_type = sku_to_instance_type.get(sku)
             price = float(
-                emr_pricing['terms']['OnDemand'][sku].itervalues().next()[
-                    'priceDimensions']
+                emr_pricing['terms']['OnDemand'][sku]
+                .itervalues().next()['priceDimensions']
                 .itervalues().next()['pricePerUnit']['USD'])
             self.emr_prices[instance_type] = price
 
         ec2_regions_response = requests.get(
             url_base + index['offers']['AmazonEC2']['currentRegionIndexUrl'])
-        ec2_region_url = url_base + \
-                         ec2_regions_response.json()['regions'][region][
-                             'currentVersionUrl']
+        ec2_region_url = \
+            url_base + \
+            ec2_regions_response.json()['regions'][region]['currentVersionUrl']
 
         ec2_pricing = requests.get(ec2_region_url).json()
 
@@ -119,7 +119,8 @@ class Ec2EmrPricing:
                         ec2_pricing['products'][sku]['attributes'][
                             'operatingSystem'] == 'Linux'):
                     ec2_sku_to_instance_type[sku] = \
-                    ec2_pricing['products'][sku]['attributes']['instanceType']
+                        ec2_pricing['products'][sku]['attributes'][
+                            'instanceType']
 
             except KeyError:
                 pass
@@ -128,8 +129,8 @@ class Ec2EmrPricing:
         for sku in ec2_sku_to_instance_type.keys():
             instance_type = ec2_sku_to_instance_type.get(sku)
             price = float(
-                ec2_pricing['terms']['OnDemand'][sku].itervalues().next()[
-                    'priceDimensions']
+                ec2_pricing['terms']['OnDemand'][sku]
+                .itervalues().next()['priceDimensions']
                 .itervalues().next()['pricePerUnit']['USD'])
             self.ec2_prices[instance_type] = price
 
@@ -183,7 +184,7 @@ class EmrCostCalculator:
         Joins the information from the instance groups and the instances
         in order to calculate the price of the whole cluster
 
-        It is important that we use a backoff policy in this case since Amazon
+        It is important that we use a back off policy in this case since Amazon
         throttles the number of API requests.
         :return: A dictionary with the total cost of the cluster and the
                 individual cost of each instance group (Master, Core, Task)
@@ -376,7 +377,7 @@ class SpotPricing:
                 # this is the last price measurement we want: add final part of
                 # price segment and exit
                 seconds_passed = (
-                            end_time - summed_until_timestamp).total_seconds()
+                        end_time - summed_until_timestamp).total_seconds()
                 summed_price = summed_price + (float(seconds_passed) * prices[
                     price_timestamp] / 3600.0)
                 return summed_price
