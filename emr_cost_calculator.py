@@ -48,7 +48,8 @@ def is_error_retriable(exception):
     Use this function in order to back off only
     if error is retriable
     """
-    # TODO verify if this is correct way to handle this. Haven't seen errors like this myself
+    # TODO verify if this is correct way to handle this. Haven't seen errors
+    # TODO like this myself
     try:
         return exception.response['Error']['Code'].startswith("5")
     except AttributeError:
@@ -57,7 +58,8 @@ def is_error_retriable(exception):
 
 class Ec2Instance:
     def __init__(self, creation_ts, termination_ts, instance_type, market_type):
-        # creation_ts (EMR instance group parameter) correlates to EC2 instance start up time
+        # creation_ts (EMR instance group parameter) correlates to EC2 instance
+        # start up time
         self.creation_ts = creation_ts
         self.termination_ts = termination_ts
         self.instance_type = instance_type
@@ -147,7 +149,8 @@ class EmrCostCalculator:
             sys.exit()
 
         try:
-            self.spot_pricing = SpotPricing(region, aws_access_key_id, aws_secret_access_key)
+            self.spot_pricing = SpotPricing(region, aws_access_key_id,
+                                            aws_secret_access_key)
         except:
             print >> sys.stderr, \
                 '[ERROR] Could not establish connection with EC2 API'
