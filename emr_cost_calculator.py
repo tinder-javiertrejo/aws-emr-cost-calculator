@@ -176,23 +176,22 @@ class EmrCostCalculator:
         try:
             self.conn = boto3.client('emr', region_name=region)
         except Exception as e:
-            print('[ERROR] Could not establish connection with EMR API',
-                  file=sys.stderr)
-            print(e)
+            print('[ERROR] Could not establish connection with EMR API\n{}'
+                  .format(e), file=sys.stderr)
             sys.exit()
 
         try:
             self.spot_pricing = SpotPricing()
-        except:
-            print('[ERROR] Could not establish connection with EC2 API',
-                  file=sys.stderr)
+        except Exception as e:
+            print('[ERROR] Could not establish connection with EC2 API\n{}'
+                  .format(e), file=sys.stderr)
+            sys.exit()
 
         self.ec2_emr_pricing = Ec2EmrPricing()
 
     def get_total_cost_by_dates(self, created_after, created_before):
         total_cost = 0
-        for cluster_id in \
-                self._get_cluster_list(created_after, created_before):
+        for cluster_id in self._get_cluster_list(created_after, created_before):
             cost_dict = self.get_cluster_cost(cluster_id)
             if 'TOTAL' in cost_dict:
                 total_cost += cost_dict['TOTAL']
