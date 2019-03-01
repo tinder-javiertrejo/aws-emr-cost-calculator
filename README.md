@@ -1,11 +1,14 @@
 ## EMR Cost Calculator
 
-#### A simple python module that calculates the cost of a single or a group of EMR clusters.
+#### Features at a glance
+- Calculates exact costs of an EMR cluster (EMR + EC2 costs)
+- More EMR clusters can be included for given time period
+- Spot prices and all other prices are exact and are retrived every time from AWS Pricing API
+- If cluster is still running, costs incured up to current time are displayed
 
-Given that Amazon doesn't provide a straightforward solution to calculate the cost of an EMR workflow, this module aims to calculate the cost of an EMR workflow given a period of days,
-or the cost of a single cluster given the cluster id. The simple way to do that would be to use the information given by the JobFLow method of the boto.emr module. However, this method
-doesn't return any information about the Task nodes of a cluster, and whether or not spot instances were used. This cost calculator takes care of both. OnDemand instance prices are
-retrieved using AWS pricing API. In case spot instances were used, the price is retrieved using AWS EC2 API.
+#### Why the need for this script
+
+Given that Amazon doesn't provide a straightforward solution to calculate the cost of an EMR workflow, this module aims to calculate the cost of an EMR workflow given a period of days, or the cost of a single cluster given the cluster id. The simple way to do that would be to use the information given by the JobFLow method of the boto.emr module. However, this method doesn't return any information about the Task nodes of a cluster, and whether or not spot instances were used. This cost calculator takes care of both. OnDemand instance prices are retrieved using AWS pricing API. In case spot instances were used, the price is retrieved using AWS EC2 API.
 
 ### How it works
 
