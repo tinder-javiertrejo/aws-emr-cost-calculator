@@ -17,10 +17,10 @@ This module is using [docopt](http://docopt.org/) to parse command line argument
 It currently supports two operations:
 
 1. Get the total cost of an EMR workflow for a given period of days
-  * `emr_cost_calculator.py total --created_after=<YYYY-MM-DD> --created_before=<YYYY-MM-DD>`
+  * `aws-emr-cost-calculator total --created_after=<YYYY-MM-DD> --created_before=<YYYY-MM-DD>`
 
 2. Get the cost of an EMR cluster given the cluster id
-  * `emr_cost_calculator.py cluster --cluster_id=<j-xxxxxxxxxxxx>`
+  * `aws-emr-cost-calculator cluster --cluster_id=<j-xxxxxxxxxxxx>`
 
 Authentication to AWS API is done using credentials of AWS CLI which are configured by executing
 `aws configure`

@@ -2,10 +2,10 @@
 """EMR cost calculator
 
 Usage:
-    emr_cost_calculator.py total --created_after=<ca> --created_before=<cb>
+    aws-emr-cost-calculator total --created_after=<ca> --created_before=<cb>
     [--profile=<profile>]
-    emr_cost_calculator.py cluster --cluster_id=<ci> [--profile=<profile>]
-    emr_cost_calculator.py -h | --help
+    aws-emr-cost-calculator cluster --cluster_id=<ci> [--profile=<profile>]
+    aws-emr-cost-calculator -h | --help
 
 
 Options:
