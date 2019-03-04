@@ -30,7 +30,8 @@ Authentication to AWS API is done using credentials of AWS CLI which are configu
 To install all requirements it's best to use
 `pip install -r requirements.txt`
 
-Users with python<2.7.9 won't be able to run the code if requests[security] isn't installed (which is listed in requirements.txt)
+Users with python<2.7.9 won't be able to run the code if requests[security] isn't installed (which is listed in requirements.txt)<br>
+Python 3.7 is tested, lower 3x versions will probably work though.  
 
 ### License
 
