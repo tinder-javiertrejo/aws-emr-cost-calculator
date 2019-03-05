@@ -13,7 +13,7 @@ setuptools.setup(
     url="https://github.com/marko-bast/emr-cost-calculator",
     packages=setuptools.find_packages(),
     classifiers=[
-        'Programming Language :: Python :: 2.7.9',
+        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3.7',
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
