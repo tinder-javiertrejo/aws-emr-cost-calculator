@@ -30,6 +30,18 @@ It currently supports two operations:
 Authentication to AWS API is done using credentials of AWS CLI which are configured by executing
 `aws configure`
 
+### Exapmle run
+```
+$ aws-emr-cost-calculator cluster --cluster_id=j-K3C155R34111
+CORE.EC2    :   0.40
+CORE.EMR    :   0.11
+MASTER.EC2  :   0.40
+MASTER.EMR  :   0.11
+TASK.EC2    :   2.80
+TASK.EMR    :   3.12
+TOTAL       :   6.93
+```
+
 ### License
 
 Distributed under the MIT license. See `LICENSE` for more information.
