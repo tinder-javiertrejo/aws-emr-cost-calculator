@@ -15,9 +15,6 @@ Given that Amazon doesn't provide a straightforward solution to calculate the co
 To install or upgrade the package it's best to use pip:
 `pip install -U aws-emr-cost-calculator`
 
-Users with python<2.7.9 won't be able to run the code if requests[security] isn't installed (which is listed in requirements.txt)<br>
-Python 3.7 is tested, lower 3x versions will probably work though.  
-
 ### How it works
 
 This module is using [docopt](http://docopt.org/) to parse command line arguments.
