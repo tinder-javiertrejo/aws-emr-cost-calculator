@@ -30,7 +30,7 @@ It currently supports two operations:
 Authentication to AWS API is done using credentials of AWS CLI which are configured by executing
 `aws configure`
 
-### Exapmle run
+### Example run
 ```
 $ aws-emr-cost-calculator cluster --cluster_id=j-K3C155R34111
 CORE.EC2    :   0.40
