@@ -76,7 +76,7 @@ class Ec2EmrPricing:
     def __init__(self):
         my_session = boto3.session.Session()
         region = my_session.region_name
-        url_base = 'https://pricing.' + region + '.amazonaws.com'
+        url_base = 'https://pricing.us-east-1.amazonaws.com'
 
         index_response = requests.get(url_base + '/offers/v1.0/aws/index.json')
         index = index_response.json()
