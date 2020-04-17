@@ -1,0 +1,8 @@
+README.md
+aws-emr-cost-calculator
+setup.py
+aws_emr_cost_calculator2.egg-info/PKG-INFO
+aws_emr_cost_calculator2.egg-info/SOURCES.txt
+aws_emr_cost_calculator2.egg-info/dependency_links.txt
+aws_emr_cost_calculator2.egg-info/requires.txt
+aws_emr_cost_calculator2.egg-info/top_level.txt

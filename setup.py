@@ -2,15 +2,15 @@
 import setuptools
 
 setuptools.setup(
-    name='aws-emr-cost-calculator',
-    version='0.0.1',
-    scripts=['aws-emr-cost-calculator'],
-    author="Marko Baštovanović",
-    author_email="marko.bast@gmail.com",
+    name='aws-emr-cost-calculator2',
+    version='0.1.0',
+    scripts=['aws-emr-cost-calculator2'],
+    author="Mauro Pelucchi from an idea of Marko Baštovanović",
+    author_email="mauro.pelucchi@gmail.com",
     description="Utility package to calculate cost of an AWS EMR cluster",
     long_description=open('README.md').read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/marko-bast/emr-cost-calculator",
+    url="https://github.com/mauropelucchi/aws-emr-cost-calculator",
     packages=setuptools.find_packages(),
     classifiers=[
         'Programming Language :: Python :: 2.7',

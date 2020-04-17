@@ -1,0 +1,4 @@
+requests[security]>=2.18.3
+retrying
+boto3>=1.9
+docopt
