@@ -54,6 +54,18 @@ TASK.EMR    :   3.12
 TOTAL       :   6.95
 ```
 
+### How release a new module
+
+To release a new module you have to use:
+- pypi
+- twine
+
+For example, to deploy the 0.1.1 version:
+```
+python setup.py sdist
+twine upload dist/*0.1.1* -r pypi
+```
+
 ### License
 
 Distributed under the MIT license. See `LICENSE` for more information.

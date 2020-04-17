@@ -1,5 +1,5 @@
 README.md
-aws-emr-cost-calculator
+aws-emr-cost-calculator2
 setup.py
 aws_emr_cost_calculator2.egg-info/PKG-INFO
 aws_emr_cost_calculator2.egg-info/SOURCES.txt
