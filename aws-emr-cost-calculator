@@ -55,21 +55,23 @@ def is_error_retriable(exception):
 
 
 class Ec2Instance:
-    def __init__(self, creation_ts, termination_ts, instance_type, market_type):
+    def __init__(self, creation_ts, termination_ts, instance_type,
+                 market_type, ebs_volumes):
         # creation_ts (EMR instance group parameter) correlates to EC2 instance
         # start up time
         self.creation_ts = creation_ts
         self.termination_ts = termination_ts
         self.instance_type = instance_type
         self.market_type = market_type
+        self.ebs_volumes = ebs_volumes
 
 
 class InstanceGroup:
-    def __init__(self, group_id, instance_type, market_type, group_type):
+    def __init__(self, group_id, instance_type, group_type, disk_size=[]):
         self.group_id = group_id
         self.instance_type = instance_type
-        self.market_type = market_type
         self.group_type = group_type
+        self.disk_size = disk_size
 
 
 class Ec2EmrPricing:
@@ -191,7 +193,8 @@ class EmrCostCalculator:
 
     def get_total_cost_by_dates(self, created_after, created_before):
         total_cost = 0
-        for cluster_id in self._get_cluster_list(created_after, created_before):
+        for cluster_id in self._get_cluster_list(created_after,
+                                                 created_before):
             cost_dict = self.get_cluster_cost(cluster_id)
             if 'TOTAL' in cost_dict:
                 total_cost += cost_dict['TOTAL']
@@ -215,37 +218,76 @@ class EmrCostCalculator:
         :return: A dictionary with the total cost of the cluster and the
                 individual cost of each instance group (Master, Core, Task)
         """
-        instance_groups = self._get_instance_groups(cluster_id)
+        cost_dict = {}
         availability_zone = self._get_availability_zone(cluster_id)
 
-        cost_dict = {}
-        for instance_group in instance_groups:
-            for instance in self._get_instances(instance_group, cluster_id):
-                cost = self._get_instance_cost(instance, availability_zone)
-                group_type = instance_group.group_type
-                cost_dict.setdefault(group_type + ".EC2", 0)
-                cost_dict[group_type + ".EC2"] += cost
-                cost_dict.setdefault(group_type + ".EMR", 0)
-                hours_run = ((instance.termination_ts - instance.creation_ts)
-                             .total_seconds() / 3600)
-                emr_cost = self.ec2_emr_pricing.get_emr_price(
-                    instance.instance_type) * hours_run
-                cost_dict[group_type + ".EMR"] += emr_cost
-                cost_dict.setdefault('TOTAL', 0)
-                cost_dict['TOTAL'] += cost + emr_cost
+        try:
+            instance_groups = self._get_instance_groups(cluster_id)
+
+            for instance_group in instance_groups:
+                for instance in self._get_instances(instance_group,
+                                                    cluster_id):
+                    cost = self._get_instance_cost(instance, availability_zone)
+                    group_type = instance_group.group_type
+                    cost_dict.setdefault(group_type + ".EC2", 0)
+                    cost_dict[group_type + ".EC2"] += cost
+                    cost_dict.setdefault(group_type + ".EMR", 0)
+                    hours_run = ((instance.termination_ts -
+                                  instance.creation_ts)
+                                 .total_seconds() / 3600)
+                    emr_cost = self.ec2_emr_pricing.get_emr_price(
+                        instance.instance_type) * hours_run
+                    cost_dict[group_type + ".EMR"] += emr_cost
+                    # ebs
+                    ebs_cost = 0
+                    cost_dict.setdefault(group_type + ".EBS", 0)
+                    for ebs in instance_group.disk_size:
+                        ebs_cost = ebs_cost + ebs['VolumeSpecification']['SizeInGB'] * 0.1 *  hours_run / (24 * 30)
+                    cost_dict[group_type + ".EBS"] += ebs_cost
+                    cost_dict.setdefault('TOTAL', 0)
+                    cost_dict['TOTAL'] += cost + emr_cost
+        except Exception:
+            instance_fleets = self._get_instance_fleets(cluster_id)
+            for instance_fleet in instance_fleets:
+                for instance in self._get_instances(instance_fleet,
+                                                    cluster_id, True):
+                    print(instance)
+                    cost = self._get_instance_cost(instance, availability_zone)
+                    if(cost is None):
+                        cost = 0
+                    group_type = instance_fleet.group_type
+                    cost_dict.setdefault(group_type + ".EC2", 0)
+                    cost_dict[group_type + ".EC2"] += cost
+                    cost_dict.setdefault(group_type + ".EMR", 0)
+                    hours_run = ((instance.termination_ts -
+                                  instance.creation_ts)
+                                 .total_seconds() / 3600)
+                    emr_cost = self.ec2_emr_pricing.get_emr_price(
+                        instance.instance_type) * hours_run
+                    cost_dict[group_type + ".EMR"] += emr_cost
+                    # ebs
+                    ebs_cost = 0
+                    cost_dict.setdefault(group_type + ".EBS", 0)
+                    for ebs in instance_fleet.disk_size:
+                        ebs_cost = ebs_cost + ebs['VolumeSpecification']['SizeInGB'] * 0.1 *  hours_run / (24 * 30)
+                    cost_dict[group_type + ".EBS"] += ebs_cost
+                    cost_dict.setdefault('TOTAL', 0)
+                    cost_dict['TOTAL'] += cost + emr_cost + ebs_cost
 
         return cost_dict
 
     def _get_instance_cost(self, instance, availability_zone):
         if instance.market_type == "SPOT":
             return self.spot_pricing.get_billed_price_for_period(
-                instance.instance_type, availability_zone, instance.creation_ts,
+                instance.instance_type, availability_zone,
+                instance.creation_ts,
                 instance.termination_ts)
 
         elif instance.market_type == "ON_DEMAND":
             ec2_price = self.ec2_emr_pricing.get_ec2_price(
                 instance.instance_type)
-            return ec2_price * ((instance.termination_ts - instance.creation_ts)
+            return ec2_price * ((instance.termination_ts -
+                                 instance.creation_ts)
                                 .total_seconds() / 3600)
 
     def _get_cluster_list(self, created_after, created_before):
@@ -275,14 +317,33 @@ class EmrCostCalculator:
             inst_group = InstanceGroup(
                 group['Id'],
                 group['InstanceType'],
-                group['Market'],
-                group['InstanceGroupType']
+                group['InstanceGroupType'],
+                group['EbsBlockDevices']
             )
 
             instance_groups.append(inst_group)
         return instance_groups
 
-    def _get_instances(self, instance_group, cluster_id):
+    def _get_instance_fleets(self, cluster_id):
+        """
+        Invokes the EMR api and gets a list of the cluster's instance fleets.
+        :return: List of our custom InstanceFleet objects
+        """
+        fleets = self.conn.list_instance_fleets(ClusterId=cluster_id)[
+            'InstanceFleets']
+        instance_fleets = []
+        for fleet in fleets:
+            inst_fleet = InstanceGroup(
+                fleet['Id'],
+                fleet['InstanceTypeSpecifications'][0]['InstanceType'],
+                fleet['InstanceFleetType'],
+                fleet['InstanceTypeSpecifications'][0]['EbsBlockDevices']
+            )
+
+            instance_fleets.append(inst_fleet)
+        return instance_fleets
+
+    def _get_instances(self, instance_group, cluster_id, fleet=False):
         """
         Invokes the EMR api to retrieve a list of all the instances
         that were used in the cluster.
@@ -293,6 +354,9 @@ class EmrCostCalculator:
         instance_list = []
         list_instances_args = {'ClusterId': cluster_id,
                                'InstanceGroupId': instance_group.group_id}
+        if(fleet):
+            list_instances_args = {'ClusterId': cluster_id,
+                                   'InstanceFleetId': instance_group.group_id}
         while True:
             batch = self.conn.list_instances(**list_instances_args)
             instance_list.extend(batch['Instances'])
@@ -316,12 +380,14 @@ class EmrCostCalculator:
                 inst = Ec2Instance(
                     instance_info['Status']['Timeline']['CreationDateTime'],
                     end_date_time,
-                    instance_group.instance_type,
-                    instance_group.market_type
+                    instance_info['InstanceType'],
+                    instance_info['Market'],
+                    instance_info['EbsVolumes']
                 )
                 yield inst
             except AttributeError as e:
-                print('[WARN] Error when computing instance cost. Cluster: {}\n'
+                print('[WARN] Error when computing instance cost.'
+                      'Cluster: {}\n'
                       '{}'.format(cluster_id, e), file=sys.stderr)
 
     def _get_availability_zone(self, cluster_id):
@@ -368,7 +434,7 @@ class SpotPricing:
                 if previous_ts - price['Timestamp'] \
                         > datetime.timedelta(days=1, hours=1):
                     print(
-                        "[ERROR] Expecting maximum of 1 day 1 hour difference" 
+                        "[ERROR] Expecting maximum of 1 day 1 hour difference"
                         " between spot price entries. Two dates "
                         "causing problems: {} AND {} Diff is: {}"
                         .format(
@@ -402,7 +468,7 @@ class SpotPricing:
                 # this is the last price measurement we want: add final part of
                 # price segment and exit
                 seconds_passed = (
-                        end_time - summed_until_timestamp).total_seconds()
+                    end_time - summed_until_timestamp).total_seconds()
                 summed_price = summed_price + (float(seconds_passed) * prices[
                     price_timestamp] / 3600.0)
                 return summed_price
