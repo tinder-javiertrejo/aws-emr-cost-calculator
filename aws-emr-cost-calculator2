@@ -245,7 +245,7 @@ class EmrCostCalculator:
                         ebs_cost = ebs_cost + ebs['VolumeSpecification']['SizeInGB'] * 0.1 *  hours_run / (24 * 30)
                     cost_dict[group_type + ".EBS"] += ebs_cost
                     cost_dict.setdefault('TOTAL', 0)
-                    cost_dict['TOTAL'] += cost + emr_cost
+                    cost_dict['TOTAL'] += cost + emr_cost + ebs_cost
         except Exception:
             instance_fleets = self._get_instance_fleets(cluster_id)
             for instance_fleet in instance_fleets:
