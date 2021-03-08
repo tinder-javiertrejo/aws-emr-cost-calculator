@@ -1,8 +1,16 @@
+.gitignore
+LICENSE
 README.md
+__init__.py
 aws-emr-cost-calculator2
+book.json
 setup.py
+__pycache__/__init__.cpython-37.pyc
 aws_emr_cost_calculator2.egg-info/PKG-INFO
 aws_emr_cost_calculator2.egg-info/SOURCES.txt
 aws_emr_cost_calculator2.egg-info/dependency_links.txt
 aws_emr_cost_calculator2.egg-info/requires.txt
 aws_emr_cost_calculator2.egg-info/top_level.txt
+calculator/__init__.py
+calculator/calculator.py
+calculator/conf.py
