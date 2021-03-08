@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: aws-emr-cost-calculator2
-Version: 0.1.2
+Version: 0.1.3
 Summary: Utility package to calculate cost of an AWS EMR cluster
 Home-page: https://github.com/mauropelucchi/aws-emr-cost-calculator
 Author: Mauro Pelucchi from an idea of Marko Baštovanović
