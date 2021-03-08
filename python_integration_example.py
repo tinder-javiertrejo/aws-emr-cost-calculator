@@ -1,8 +1,8 @@
 from calculator.calculator import EmrCostCalculator
 import boto3
 
-my_cluster = "j-82DRIEHWQYPI"
-profile = "tbx"
+my_cluster = "****"
+profile = "****"
 
 boto3.setup_default_session(profile_name=profile)
 calc = EmrCostCalculator()
