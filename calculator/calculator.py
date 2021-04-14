@@ -48,9 +48,10 @@ class InstanceGroup:
 
 
 class Ec2EmrPricing:
-    def __init__(self):
-        my_session = boto3.session.Session()
-        region = my_session.region_name
+    def __init__(self, region: str = None):
+        if region is None:
+            my_session = boto3.session.Session()
+            region = my_session.region_name
         url_base = 'https://pricing.us-east-1.amazonaws.com'
 
         index_response = requests.get(url_base + '/offers/v1.0/aws/index.json')
@@ -145,9 +146,10 @@ class Ec2EmrPricing:
 
 
 class EmrCostCalculator:
-    def __init__(self):
-        my_session = boto3.session.Session()
-        region = my_session.region_name
+    def __init__(self, region: str = None):
+        if region is None:
+            my_session = boto3.session.Session()
+            region = my_session.region_name
         try:
             self.conn = boto3.client('emr', region_name=region)
         except Exception as e:
@@ -156,13 +158,13 @@ class EmrCostCalculator:
             sys.exit()
 
         try:
-            self.spot_pricing = SpotPricing()
+            self.spot_pricing = SpotPricing(region=region)
         except Exception as e:
             print('[ERROR] Could not establish connection with EC2 API\n{}'
                   .format(e), file=sys.stderr)
             sys.exit()
 
-        self.ec2_emr_pricing = Ec2EmrPricing()
+        self.ec2_emr_pricing = Ec2EmrPricing(region=region)
 
     def get_total_cost_by_dates(self, created_after, created_before):
         total_cost = 0
@@ -371,9 +373,10 @@ class EmrCostCalculator:
 
 class SpotPricing:
 
-    def __init__(self):
-        my_session = boto3.session.Session()
-        region = my_session.region_name
+    def __init__(self, region: str = None):
+        if region is None:
+            my_session = boto3.session.Session()
+            region = my_session.region_name
         self.all_prices = {}
         self.client_ec2 = boto3.client('ec2', region_name=region)
 
