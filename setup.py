@@ -3,7 +3,7 @@ import setuptools
 
 setuptools.setup(
     name='aws-emr-cost-calculator2',
-    version='0.1.4',
+    version='0.1.5',
     scripts=['aws-emr-cost-calculator2'],
     author="Mauro Pelucchi from an idea of Marko Baštovanović",
     author_email="mauro.pelucchi@gmail.com",
