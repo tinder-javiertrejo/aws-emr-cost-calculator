@@ -405,6 +405,8 @@ class EmrCostCalculator:
 
                     if end_date_tz <= creation_time:
                         continue
+                    if start_date_tz >= end_date_time:
+                        continue
 
                     if creation_time <= start_date_tz:
                         creation_time = start_date_tz
