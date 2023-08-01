@@ -5,8 +5,8 @@ Usage:
     aws-emr-cost-calculator total --created_after=<ca> --created_before=<cb>
     [--profile=<profile>]
     [--region=<region>]
-    aws-emr-cost-calculator cluster --cluster_id=<ci> [--profile=<profile>]
-    [--region=<region>]
+    aws-emr-cost-calculator cluster --cluster_id=<ci>
+    [--profile=<profile>] [--region=<region>] [--created_after=<ca>] [--created_before=<cb>]
     aws-emr-cost-calculator -h | --help
 
 
@@ -32,25 +32,31 @@ from docopt import docopt
 import sys
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = docopt(__doc__)
-    profile = args.get('--profile')
-    region = args.get('--region')
+    profile = args.get("--profile")
+    region = args.get("--region")
     if profile is not None:
         boto3.setup_default_session(profile_name=profile)
 
-    if args.get('total'):
-        created_after_arg = validate_date(args.get('--created_after'))
-        created_before_arg = validate_date(args.get('--created_before'))
-        calc = EmrCostCalculator(region=region)
-        print("TOTAL COST: {:.2f}".format(calc.get_total_cost_by_dates(
-            created_after_arg, created_before_arg)))
+    created_after_arg = validate_date(args.get("--created_after"))
+    created_before_arg = validate_date(args.get("--created_before"))
 
-    elif args.get('cluster'):
+    if args.get("total"):
         calc = EmrCostCalculator(region=region)
-        calculated_prices = calc.get_cluster_cost(args.get('--cluster_id'))
+        print(
+            "TOTAL COST: {:.2f}".format(
+                calc.get_total_cost_by_dates(created_after_arg, created_before_arg)
+            )
+        )
+
+    elif args.get("cluster"):
+        calc = EmrCostCalculator(region=region)
+        calculated_prices = calc.get_cluster_cost(
+            args.get("--cluster_id"), created_after_arg, created_before_arg
+        )
+
         for key in sorted(calculated_prices.keys()):
             print("{:12s}: {:6.2f}".format(key, calculated_prices[key]))
     else:
-        print('[ERROR] Invalid operation, please check usage again',
-              file=sys.stderr)
+        print("[ERROR] Invalid operation, please check usage again", file=sys.stderr)

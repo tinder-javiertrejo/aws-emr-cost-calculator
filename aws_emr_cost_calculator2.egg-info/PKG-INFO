@@ -5,8 +5,6 @@ Summary: Utility package to calculate cost of an AWS EMR cluster
 Home-page: https://github.com/mauropelucchi/aws-emr-cost-calculator
 Author: Mauro Pelucchi from an idea of Marko Baštovanović
 Author-email: mauro.pelucchi@gmail.com
-License: UNKNOWN
-Platform: UNKNOWN
 Classifier: Programming Language :: Python :: 2.7
 Classifier: Programming Language :: Python :: 3.7
 Classifier: License :: OSI Approved :: MIT License
@@ -85,5 +83,3 @@ twine upload dist/*0.1.1* -r pypi
 ### License
 
 Distributed under the MIT license. See `LICENSE` for more information.
-
-
