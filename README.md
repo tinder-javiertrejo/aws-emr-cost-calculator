@@ -20,51 +20,15 @@ EBS cost is fixed to 0.1 $ for month.
 
 ### Install
 
-To install or upgrade the package it's best to use pip:
-`pip install -U aws-emr-cost-calculator2`
+To install or upgrade the package it's best to use pip at the root of the rep:
+`pip install .`
 
 ### How it works
 
 This module is using [docopt](http://docopt.org/) to parse command line arguments.
 
-It currently supports two operations:
-
-1. Get the cost of an EMR cluster given the cluster id
-  * `aws-emr-cost-calculator2 cluster --cluster_id=<j-xxxxxxxxxxxx>`
-
-Authentication to AWS API is done using credentials of AWS CLI which are configured by executing
-`aws configure`
-
-For example (if you want to use a different profile):
-  * `aws-emr-cost-calculator2 cluster --cluster_id=<j-xxxxxxxxxxxx> --profile=<your profile>`
-
-Remember to include your default region in the default section of your ./aws/config file.
-
-### Example run
-```
-$ aws-emr-cost-calculator cluster --cluster_id=j-K3C155R34111 --profile=myorg
-CORE.EC2    :   0.40
-CORE.EMR    :   0.11
-CORE.EBS    :   0.01
-MASTER.EC2  :   0.40
-MASTER.EBS  :   0.01
-MASTER.EMR  :   0.11
-TASK.EC2    :   2.80
-TASK.EMR    :   3.12
-TOTAL       :   6.95
-```
-
-### How release a new module
-
-To release a new module you have to use:
-- pypi
-- twine
-
-For example, to deploy the 0.1.1 version:
-```
-python setup.py sdist
-twine upload dist/*0.1.1* -r pypi
-```
+1. Get the cost of an EMR cluster given the cluster id and a start and end timestamp
+  * `aws-emr-cost-calculator2 cluster --cluster_id=<j-xxxxxxxxxxxx> --profile=<your profile> --created_after="2024-01-28 00:00" --created_before="2024-01-28 07:01"`
 
 ### License
 
